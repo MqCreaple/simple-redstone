@@ -5,12 +5,14 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from nucleation import NucleationError, RenderConfig, Renderer, ResourcePack, ResourcePackList
+from nucleation import MeshConfig, MeshResult, NucleationError, RenderConfig, Renderer, ResourcePack, ResourcePackList
+from numpy.typing import NDArray
 
 from .errors import RenderError
 from .model import Structure
@@ -30,6 +32,15 @@ class RenderOptions:
             raise RenderError("render dimensions must be positive")
         if self.zoom <= 0:
             raise RenderError("render zoom must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class ViewerModel:
+    """A GPU-ready GLB and its world-space bounds."""
+
+    glb: bytes
+    bounds_min: NDArray[np.float32]
+    bounds_max: NDArray[np.float32]
 
 
 class StructureRenderer:
@@ -79,6 +90,25 @@ class StructureRenderer:
             raise RenderError(f"failed to render structure: {exc}") from exc
         return base64.b64decode(encoded)
 
+    def viewer_model(self) -> ViewerModel:
+        """Export a GLB with atlas-correct UVs for interactive rendering."""
+
+        config = MeshConfig.create()
+        config.set_cull_hidden_faces(True)
+        config.set_cull_occluded_blocks(True)
+        config.set_greedy_meshing(True)
+        try:
+            exported = MeshResult.create(self.structure.schematic, self.resource_pack, config)
+        except NucleationError as exc:
+            raise RenderError(f"failed to build interactive model: {exc}") from exc
+
+        bounds = exported.bounds()
+        return ViewerModel(
+            glb=base64.b64decode(exported.glb_data_b64()),
+            bounds_min=np.array([bounds.min_x, bounds.min_y, bounds.min_z], dtype=np.float32),
+            bounds_max=np.array([bounds.max_x, bounds.max_y, bounds.max_z], dtype=np.float32),
+        )
+
     @staticmethod
     def _load_resource_pack(path: Path) -> ResourcePack:
         try:
@@ -111,68 +141,122 @@ def render_interactive(
     height: int = 700,
     resource_pack: str | Path | None = None,
 ) -> None:
+    if width <= 0 or height <= 0:
+        raise RenderError("render dimensions must be positive")
+
     try:
-        import tkinter as tk
+        import pygfx as gfx
+        from rendercanvas.auto import RenderCanvas
     except ImportError as exc:
-        raise RenderError("interactive rendering requires tkinter") from exc
+        raise RenderError("interactive rendering requires pygfx and glfw") from exc
 
     pack_path = Path(resource_pack) if resource_pack is not None else None
     renderer = StructureRenderer(structure, pack_path)
+    model_data = renderer.viewer_model()
+    if np.any(model_data.bounds_min == model_data.bounds_max):
+        raise RenderError("structure does not contain any visible blocks")
+
+    model = _load_viewer_model(gfx, model_data.glb)
+    scene, camera, target, floor_height = _build_viewer_scene(
+        gfx,
+        model,
+        model_data.bounds_min,
+        model_data.bounds_max,
+    )
+
     try:
-        root = tk.Tk()
-    except tk.TclError as exc:
-        raise RenderError(f"cannot open interactive renderer: {exc}") from exc
+        canvas = RenderCanvas(size=(width, height), title="Simple Redstone Renderer", max_fps=60)
+        renderer = gfx.WgpuRenderer(canvas)
+        controller = gfx.OrbitController(camera, target=target, register_events=renderer)
 
-    root.title("Simple Redstone Renderer")
-    canvas = tk.Canvas(root, width=width, height=height, highlightthickness=0)
-    canvas.pack()
+        def close_on_escape(event: dict[str, Any]) -> None:
+            if event.get("key") == "Escape":
+                canvas.close()
 
-    state = {"yaw": -45.0, "pitch": 30.0, "zoom": 1.0, "drag": None, "scheduled": False, "image": None}
+        renderer.add_event_handler(close_on_escape, "key_down")
+        gfx.show(
+            scene,
+            canvas=canvas,
+            renderer=renderer,
+            controller=controller,
+            camera=camera,
+        )
+    except Exception as exc:
+        if "canvas" in locals():
+            canvas.close()
+        raise RenderError(f"failed to open interactive renderer: {exc}") from exc
 
-    def draw() -> None:
-        state["scheduled"] = False
-        options = RenderOptions(width=width, height=height, resource_pack=pack_path, yaw=state["yaw"], pitch=state["pitch"], zoom=state["zoom"])
-        try:
-            image = tk.PhotoImage(data=base64.b64encode(renderer.render_png_bytes(options)).decode("ascii"))
-        except RenderError as exc:
-            root.destroy()
-            raise exc
-        state["image"] = image
-        canvas.delete("all")
-        canvas.create_image(width // 2, height // 2, image=image)
 
-    def schedule_draw() -> None:
-        if not state["scheduled"]:
-            state["scheduled"] = True
-            root.after(50, draw)
+def _load_viewer_model(gfx: Any, glb: bytes) -> Any:
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as file:
+            file.write(glb)
+            temp_path = Path(file.name)
+        loaded = gfx.load_gltf(str(temp_path), quiet=True)
+    except Exception as exc:
+        raise RenderError(f"failed to load interactive GLB: {exc}") from exc
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
-    def start_drag(event: Any) -> None:
-        state["drag"] = (event.x, event.y)
+    model = loaded.scene
+    if model is None:
+        raise RenderError("interactive GLB does not contain a scene")
 
-    def drag(event: Any) -> None:
-        previous = state["drag"]
-        if previous is None:
-            return
-        state["yaw"] += (event.x - previous[0]) * 0.5
-        state["pitch"] = max(-89.0, min(89.0, state["pitch"] + (event.y - previous[1]) * 0.5))
-        state["drag"] = (event.x, event.y)
-        schedule_draw()
+    for mesh in model.iter(lambda item: isinstance(item, gfx.Mesh)):
+        for map_name in ("map", "emissive_map", "specular_map"):
+            texture_map = getattr(mesh.material, map_name, None)
+            if isinstance(texture_map, gfx.TextureMap):
+                texture_map.mag_filter = "nearest"
+                texture_map.min_filter = "nearest"
+                texture_map.mipmap_filter = "nearest"
+    return model
 
-    def stop_drag(_: Any) -> None:
-        state["drag"] = None
 
-    def zoom(event: Any) -> None:
-        factor = 1.1 if event.delta > 0 else 1 / 1.1
-        state["zoom"] = max(0.1, min(10.0, state["zoom"] * factor))
-        schedule_draw()
+def _build_viewer_scene(
+    gfx: Any,
+    model: Any,
+    bounds_min: NDArray[np.float32],
+    bounds_max: NDArray[np.float32],
+) -> tuple[Any, Any, NDArray[np.float32], float]:
+    center = ((bounds_min + bounds_max) * 0.5).astype(np.float32)
+    extent = bounds_max - bounds_min
+    radius = max(float(np.linalg.norm(extent)) * 0.5, 1.0)
+    model.local.position = -center
 
-    canvas.bind("<ButtonPress-1>", start_drag)
-    canvas.bind("<B1-Motion>", drag)
-    canvas.bind("<ButtonRelease-1>", stop_drag)
-    canvas.bind("<MouseWheel>", zoom)
-    root.bind("<Escape>", lambda _: root.destroy())
-    draw()
-    root.mainloop()
+    scene = gfx.Scene()
+    scene.add(gfx.Background(None, gfx.BackgroundMaterial("#12161d")))
+    scene.add(gfx.AmbientLight("#ffffff", 0.7))
+    key_light = gfx.DirectionalLight("#ffffff", 1.8)
+    key_light.local.position = (radius, radius * 2, radius)
+    scene.add(key_light)
+    fill_light = gfx.DirectionalLight("#c8d8ff", 0.6)
+    fill_light.local.position = (-radius, radius, -radius)
+    scene.add(fill_light)
+
+    floor_height = float(bounds_min[1] - center[1] - 0.01)
+    grid = gfx.Grid(
+        None,
+        gfx.GridMaterial(
+            major_step=1.0,
+            minor_step=0.25,
+            major_thickness=1.0,
+            minor_thickness=0.0,
+            axis_thickness=2.0,
+            axis_color="#69717d",
+            major_color="#3d444e",
+            minor_color="#2b3038",
+        ),
+        orientation="xz",
+    )
+    grid.local.position = (0.0, floor_height, 0.0)
+    scene.add(grid)
+    scene.add(model)
+
+    camera = gfx.PerspectiveCamera(50, width=radius * 2, height=radius * 2)
+    camera.show_object(model, view_dir=(-1, -1, -1), up=(0, 1, 0), scale=1.25)
+    return scene, camera, np.zeros(3, dtype=np.float32), floor_height
 
 
 def _fallback_resource_pack(structure: Structure) -> ResourcePack:

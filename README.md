@@ -32,7 +32,7 @@ Here are the full list of configurable attributes in the header in Simple Redsto
 | `dim1` | The orientation of the first dimension. | `north`, `south`, `east`, `west` | `east` |
 | `dim2` | The orientation of the second dimension. Must be a different axis from `dim1`. That is, if `dim1` is `south`, then `dim2` can only be west or east. | `north`, `south`, `east`, `west` | `south` |
 | `dim3` | The orientation of the third dimension. | `up`, `down` | `down` |
-| `solid_block` | The type of solid block chosen for the structure. | Any Minecraft solid block | `stone` |
+| `solid_block` | The type of solid block / opaque block chosen for the structure. | Any Minecraft solid block | `stone` |
 | `colored_solid_block` | The type of colored solid block chosen for the structure. | Any block name suffix for colored solid blocks | `concrete` |
 | `transparent_block` | The type of transparent block chosen for the structure. | Any Minecraft transparent block | `glass` |
 | `colored_transparent_block` | The type of colored transparent block chosen for the structure. | Any block name suffix for colored transparent blocks | `stained_glass` |
@@ -126,5 +126,7 @@ simple-redstone render -i demo.smprd -o rendered.png
 # Use a resource pack for accurate Minecraft textures
 simple-redstone render -i demo.smprd -o rendered.png --resource-pack resourcepack.zip
 ```
+
+Interactive rendering uses Pygfx and WebGPU. Drag with the left mouse button to orbit, drag with the right mouse button to pan, use the mouse wheel to zoom, and press Escape to close the window.
 
 The program uses [Nucleation](https://github.com/schem-at/nucleation) as its back end for storing block structures, converting into schematics, and rendering structures.

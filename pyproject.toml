@@ -8,9 +8,14 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "glfw>=2.10.2",
+    "gltflib>=1.0.13",
+    "imageio>=2.37.4",
     "minecraft-data>=3.20.0",
     "nucleation>=0.10.24",
     "numpy>=2.0",
+    "pillow>=12.3.0",
+    "pygfx>=0.17.0",
     "pyyaml>=6.0.2",
 ]
 
