@@ -169,9 +169,8 @@ def render_interactive(
         renderer = gfx.WgpuRenderer(canvas)
         controller = gfx.OrbitController(camera, target=target, register_events=renderer)
 
-        def close_on_escape(event: dict[str, Any]) -> None:
-            if event.get("key") == "Escape":
-                canvas.close()
+        def close_on_escape(event: Any) -> None:
+            _close_on_escape(canvas, event)
 
         renderer.add_event_handler(close_on_escape, "key_down")
         gfx.show(
@@ -185,6 +184,11 @@ def render_interactive(
         if "canvas" in locals():
             canvas.close()
         raise RenderError(f"failed to open interactive renderer: {exc}") from exc
+
+
+def _close_on_escape(canvas: Any, event: Any) -> None:
+    if getattr(event, "key", None) == "Escape":
+        canvas.close()
 
 
 def _load_viewer_model(gfx: Any, glb: bytes) -> Any:

@@ -10,7 +10,7 @@ from simple_redstone.parser import parse
 
 @pytest.mark.parametrize("extension", [".schem", ".litematic"])
 def test_backend_writes_and_reloads_supported_formats(tmp_path: Path, extension: str) -> None:
-    structure = parse("x,x;x,x")
+    structure = parse("#,#;#,#")
     output = tmp_path / f"demo{extension}"
 
     written = convert_structure(structure, output)
@@ -23,7 +23,7 @@ def test_backend_writes_and_reloads_supported_formats(tmp_path: Path, extension:
 
 
 def test_backend_rejects_java_nbt(tmp_path: Path) -> None:
-    structure = parse("x")
+    structure = parse("#")
     output = tmp_path / "demo.nbt"
 
     with pytest.raises(BackendError, match="does not support Java \\.nbt"):
@@ -31,7 +31,7 @@ def test_backend_rejects_java_nbt(tmp_path: Path) -> None:
 
 
 def test_backend_rejects_unknown_extension(tmp_path: Path) -> None:
-    structure = parse("x")
+    structure = parse("#")
     output = tmp_path / "demo.bin"
 
     with pytest.raises(BackendError, match="unsupported output format"):

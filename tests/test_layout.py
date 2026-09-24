@@ -40,7 +40,7 @@ def test_attachment_requirements_are_explicit_behavior_rules() -> None:
 
 
 def test_full_ground_fills_the_complete_bottom_layer() -> None:
-    structure = parse("---\nground: full\n---\nx,x")
+    structure = parse("---\nground: full\n---\n#,#")
 
     assert _block_at(structure.schematic, 0, -1, 0) == "stone"
     assert _block_at(structure.schematic, 1, -1, 0) == "stone"
@@ -48,7 +48,7 @@ def test_full_ground_fills_the_complete_bottom_layer() -> None:
 
 
 def test_minimal_ground_only_supports_attached_bottom_blocks() -> None:
-    structure = parse("---\nground: minimal\n---\n.,x")
+    structure = parse("---\nground: minimal\n---\n.,#")
 
     assert _block_at(structure.schematic, 0, -1, 0) == "stone"
     assert _block_at(structure.schematic, 1, -1, 0) == "minecraft:air"
@@ -69,8 +69,8 @@ def test_none_ground_adds_no_blocks() -> None:
 @pytest.mark.parametrize(
     ("dim3", "body", "ground_y"),
     [
-        ("up", ".\nx", -1),
-        ("down", "x\n.", -2),
+        ("up", ".\n#", -1),
+        ("down", "#\n.", -2),
     ],
 )
 def test_minimal_ground_checks_world_bottom_layer(dim3: str, body: str, ground_y: int) -> None:
@@ -88,7 +88,7 @@ def test_minimal_ground_checks_world_bottom_layer(dim3: str, body: str, ground_y
     ],
 )
 def test_full_ground_uses_world_bottom_layer(dim3: str, ground_y: int) -> None:
-    structure = parse(f"---\ndim3: {dim3}\nground: full\n---\nx\nx")
+    structure = parse(f"---\ndim3: {dim3}\nground: full\n---\n#\n#")
 
     assert _block_at(structure.schematic, 0, ground_y, 0) == "stone"
     assert structure.schematic.block_count() == 3

@@ -13,19 +13,19 @@ dim2: north
 solid_block: iron_block
 ---
  , ,.,.,.,|-,.,.,redstone_lamp
-x,x,x,x,x,x ,x,x,
+#,#,#,#,#,# ,#,#,
 ```
 
 Or, the header can be omitted, in which case all configurations are set to their default values.
 
 ```plaintext
  , ,.,.,.,|-,.,.,redstone_lamp
-x,x,x,x,x,x ,x,x,
+#,#,#,#,#,# ,#,#,
 ```
 
 ### Header
 
-Here are the full list of configurable attributes in the header in Simple Redstone v0.1.0.
+Here are the full list of configurable attributes in the header in Simple Redstone v0.1.1.
 
 | Attribute | Meaning | Values | Default |
 |:---------:|:-------:|:------:|:-------:|
@@ -33,6 +33,7 @@ Here are the full list of configurable attributes in the header in Simple Redsto
 | `dim2` | The orientation of the second dimension. Must be a different axis from `dim1`. That is, if `dim1` is `south`, then `dim2` can only be west or east. | `north`, `south`, `east`, `west` | `south` |
 | `dim3` | The orientation of the third dimension. | `up`, `down` | `down` |
 | `solid_block` | The type of solid block / opaque block chosen for the structure. | Any Minecraft solid block | `stone` |
+| `slab` | The type of slab chosen for the structure. | Any Minecraft slab block | `stone_slab` |
 | `colored_solid_block` | The type of colored solid block chosen for the structure. | Any block name suffix for colored solid blocks | `concrete` |
 | `transparent_block` | The type of transparent block chosen for the structure. | Any Minecraft transparent block | `glass` |
 | `colored_transparent_block` | The type of colored transparent block chosen for the structure. | Any block name suffix for colored transparent blocks | `stained_glass` |
@@ -50,7 +51,8 @@ The shorthand names of common redstone blocks are given in the following table. 
 
 | Shorthand | Meaning | Equivalent Full Name |
 |:---------:|:-------:|:--------------------:|
-| `x` | Default solid block | `$solid_block` |
+| `#` | Default solid block | `$solid_block` |
+| `=` | Default slab | `$slab` |
 | `white`, `orange`, `magenta`, ... | Colored solid block | `<color-name>` + `_` + `$colored_solid_block` |
 | `+` | Default transparent block | `$transparent_block` |
 | `+white`, `+orange`, `+magenta`, ... | Colored transparent block | `<color-name>` + `_` + `$colored_transparent_block` |
@@ -68,6 +70,8 @@ Note that for repeaters and comparators, their blocks' `facing` fields are the d
 Also note that `facing` directions of redstone torches and levers are the opposite to the blocks they are attached to. A redstone torch facing north is attached to the north-facing side of the block at the south of that torch.
 
 The shorthands can also have attributes attached to them. For example, `-o[lit=false]` will expand to `redstone_wall_torch[facing=$dim1,lit=false]`.
+
+Boolean block properties can be written without a value. `[attr]` expands to `[attr=true]`, while `[!attr]` expands to `[attr=false]`. For example, `redstone_lamp[lit]` and `redstone_lamp[!lit]` represent lit and unlit redstone lamps respectively.
 
 Empty cells are treated as air blocks. If a row has fewer than expected number of blocks, or if a layer has fewer than expected number of rows, they are padded with air blocks.
 
@@ -97,7 +101,7 @@ Tags can also be added to air blocks to indicate a vacant position. For example,
 
 ```plaintext
 /,|-,@QC
-x,x,piston
+#,#,piston
 ```
 
 The label `@QC` is on an air block, which indicates the quasi-connectivity point of the piston.

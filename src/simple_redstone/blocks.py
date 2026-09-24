@@ -27,7 +27,9 @@ _COLORS = frozenset(
     }
 )
 
-_VARIABLE_PATTERN = re.compile(r"\$(?P<negative>-?)(?P<field>dim[123]|solid_block|colored_solid_block|transparent_block|colored_transparent_block)\b")
+_VARIABLE_PATTERN = re.compile(
+    r"\$(?P<negative>-?)(?P<field>dim[123]|solid_block|slab|colored_solid_block|transparent_block|colored_transparent_block)\b"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +39,8 @@ class _Expansion:
 
 
 _SHORTHANDS: dict[str, _Expansion] = {
-    "x": _Expansion("$solid_block"),
+    "#": _Expansion("$solid_block"),
+    "=": _Expansion("$slab"),
     "+": _Expansion("$transparent_block"),
     ".": _Expansion("redstone_wire"),
     "|-": _Expansion("repeater", (("facing", "$-dim1"),)),
@@ -109,9 +112,17 @@ def _parse_properties(property_text: str, expression: str) -> tuple[tuple[str, s
 
     properties: list[tuple[str, str]] = []
     for raw_property in property_text.split(","):
-        if raw_property.count("=") != 1:
-            raise BlockExpansionError(f"invalid block property {raw_property!r} in {expression!r}")
-        key, value = (part.strip() for part in raw_property.split("=", 1))
+        raw_property = raw_property.strip()
+        if raw_property.startswith("!"):
+            key, value = raw_property[1:].strip(), "false"
+            if not key or "=" in key:
+                raise BlockExpansionError(f"invalid block property {raw_property!r} in {expression!r}")
+        elif "=" in raw_property:
+            if raw_property.count("=") != 1:
+                raise BlockExpansionError(f"invalid block property {raw_property!r} in {expression!r}")
+            key, value = (part.strip() for part in raw_property.split("=", 1))
+        else:
+            key, value = raw_property, "true"
         if not key or not value:
             raise BlockExpansionError(f"invalid block property {raw_property!r} in {expression!r}")
         properties.append((key, value))

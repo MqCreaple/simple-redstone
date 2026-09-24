@@ -80,6 +80,7 @@ class HeaderConfig:
     dim2: Direction = Direction.SOUTH
     dim3: Direction = Direction.DOWN
     solid_block: str = "stone"
+    slab: str = "stone_slab"
     colored_solid_block: str = "concrete"
     transparent_block: str = "glass"
     colored_transparent_block: str = "stained_glass"
@@ -108,7 +109,7 @@ class HeaderConfig:
         object.__setattr__(self, "dim3", dim3)
         object.__setattr__(self, "ground", ground)
 
-        for field_name in ("solid_block", "colored_solid_block", "transparent_block", "colored_transparent_block"):
+        for field_name in ("solid_block", "slab", "colored_solid_block", "transparent_block", "colored_transparent_block"):
             value = getattr(self, field_name)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{field_name} must be a non-empty string")
